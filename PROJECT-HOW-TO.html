@@ -1,0 +1,118 @@
+<html>
+<head><title>Project How To</title>
+</head>
+<body>
+This describes how to set up a project using the new build scheme. This is a living document,
+and we will need to update it as we gain more experience with Ivy. 
+
+<h2>Some assumptions:</h2>
+<ol>
+<li> Your project is a set of Rhythmyx extensions (and related code). </li>
+<li> You have dependencies on other third party (e.g. Apache) JARs </li>
+<li> Your project may or may not be re-used by other projects. </li>
+</ol>
+
+<h2>Dependencies and the Build process.</h2> 
+
+<p>In the past, we referenced Rhythmyx JARs via Eclipse "User Libraries". 
+These libraries had different names on different machines, and no two developers
+did things the same way. 
+In addition, third party JARS were placed in the /lib folder, which means that each
+project could be using different sets (and potentially different versions) of these same JARs. 
+Projects with dependencies on other code (such as the PSOToolkit) frequently contained obsolete 
+versions of the dependent JARs.   
+We're going to replace all of this with Apache Ivy.</p>
+<p>Ivy will retrieve (by means of Ant tasks added to the build.xml) all of the Rhythmyx 
+and third party JARs that your project declares as dependencies.  It will place the JARs
+in a /ivylib folder, and the build script (and your Eclipse java builder) will use
+these JARs to compile your code. </p>
+<h2>Setting up</h2>
+<ol>
+<li>Download and install Apache Ivy - From the <a href="http://ant.apache.org/ivy">Ivy Ant Website</a>. 
+The current version is the 2.0 Beta release, but we will use the 2.0 production when released. </li>
+<li>Set your Eclipse Ant preferences.  The "Ant Runtime" must contain the Ivy Jars</li>
+<li>Edit your build.xml to contain the Ant targets shown in the build.xml of this sample project.</li>
+<li>Edit the ivy.xml to describe your project and list its dependencies.</li>
+<li>Make an ivy-local.properties (based on ivy-local.sample.properties) which reflects how you connect to
+the Ivy repository on  
+<a href="http://foo.percussion.local/ivyrepo">Foo.percussion.local</a> </li>
+<li>Execute the "ivy-retrieve" target, which should extract all of the dependent jars. </li>
+<li>In the Eclipse project properties, add all of the JARs in the ivylib folder to 
+the .classpath</li>
+</ol>
+
+<h2>Ivy Repository</h2>
+<p>Although there are various public repositories of JARs, we have chosen to make a local 
+repository, which is hosted on foo.percussion.local.  We did this for a number of reasons, 
+but most important was that we get to control what versions of the third party JARs are available.
+We put the repository on Foo because everybody who develops code should already be using the 
+Subversion code library, and has access to Foo.</p>
+<p>As you can see from clicking on the link, the repository is just a directory of files, served by 
+the Apache web server.  The XML files (called "ivy files" in the Ivy documentation, describe the modules, 
+the "artifacts" (jars) which comprise them). The master 
+<a href="http://foo.percussion.local/ivyrepo/ivysettings.xml">settings</a> file gives the layout of the repository.
+There is also an XSLT stylesheet that renders the ivy files in a pretty format.</p>
+<p>If your project will produce JARs used by other projects, you should use Ivy to publish your JARs.
+Uncomment the "ivy-publish" target and make sure that your SFTP connection info in ivy-local.properties is 
+up to date, and you should be all set.  <i>Note: the ivy-publish target must be run separately from the main build target.</i></p>
+<p>If your project needs third party jars which are not in the repository, you may add them.   The minimum requirements are: 
+<ol>
+<li>An Ivy descriptor with organization name, module name, revision, and the list of jars included.</li>
+<li>The directory structure must follow the pattern in the settings file.</li>
+<li>If these JARs are already used by Rhythmyx or JBoss, you should use the same revision.</li>
+<li>All files you add to the repository should be world readable, and writable by the "pso" group.</li>
+</ol>
+The descriptor does not have to be elaborate, but the more accurate you can make the dependencies, the better.  
+You should also include a reference to <a href="http://foo.percussion.local/ivyrepo/ivy-doc.xsl">ivy-doc.xsl</a>
+</p>
+<h2>What to put in Subversion</h2>
+<p>Make sure that your Subversion project includes ALL of the following items: 
+<ul>
+<li>Source Code</li>
+<li>Build files (properties files, XML files, etc.)</li>
+<li>Ivy files, including ivy-local.sample.properties</li> 
+<li>Unit test classes and source data for unit tests.</li>
+<li>The distribution zip file (which you expect to deliver to the customer).</li>
+</ul>
+Some projects 
+put the generated JARs in Subversion as well, but this is probably not necessary, since
+these JARs are already in the zip file.
+</p>
+<p>
+It's also important to note what you should <b>NOT</b> put in Subversion: (these should be in .svnignore)
+<ul>
+<li>.project</li>
+<li>.classpath</li>
+<li>ivy-local.properties</li>
+<li>bin or classes files</li>
+<li>apidoc / javadoc files</li>
+<li>all dependency JARs, including the ivylib folder</li>
+<li>log files and other output generated by the unit tests.</li>
+</ul>
+When converting an existing project, you should remove all files <b>except</b> JARs that you generate from 
+the /lib subdirectory. All other JARs must come from the Ivy repository, even if you have to add them yourself.
+<i>Note that the PSExtensionInstallTool requires a /lib subdirectory to operate correctly.</i>
+</p>
+<h2>Advanced Topics</h2>
+<h3>Configurations</h3>
+<p>Most projects which publish to the repository will need at least 2 configurations: 
+<ol>
+<li>A "default" configuration
+that contains the generated JARs and dependency JARs which are needed at runtime. </li>
+<li>A "test" configuration that also needs the dependency JARs for unit testing. </li>
+ </ol>
+ Projects which run outside of the Rhythmyx server might well need more configurations, depending
+ on how they are executed (and what JARs are needed to execute them in different circumstances).
+ The sample ivy.xml shows how to specify which dependencies go with each configuration.
+ </p> 
+<h3>Integration Builds</h3>
+<p>Projects with a lot of dependencies may need to publish integration builds, so that tests of 
+the dependent projects aren't tied to a release build of the library project. These projects must publish
+with a status of "integration", and dependency revision will be "latest.integration". 
+The JAR names should end with "-SNAPSHOT.jar" to indicate that this is an
+integraion snapshot build. Ivy can be configured to recognize this pattern and check the timestamp 
+of these JARs every time, even if the revision has not changed.</p>
+
+</body>
+</html>
+  
